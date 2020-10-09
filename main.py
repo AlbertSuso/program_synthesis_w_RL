@@ -8,7 +8,7 @@ import nets.policies as policies
 from torchvision.datasets import MNIST
 from LibMyPaint.LibMyPaint import Environment
 from torch.optim import Adam
-from TrainingProcedures.batch_training import train, preTrainFeatureExtractor
+from TrainingProcedures.training import train, preTrainFeatureExtractor
 
 def mse_per_batch(inputs, outputs):
     return torch.sum((inputs-outputs)**2, dim=(1, 2, 3)) - torch.sum((inputs+outputs) == 2, dim=(1, 2, 3))
@@ -34,7 +34,7 @@ environments = [Environment(canvas_width, grid_width, brush_type, use_color, bru
                 for i in range(batch_size)]
 
 
-dataset = MNIST("datasets", train=True, download=False, transform=transforms.ToTensor())
+dataset = MNIST("datasets", train=False, download=True, transform=transforms.ToTensor())
 
 
 feature_extractor = featureExtractors.ResNet12(in_chanels=1)

@@ -17,7 +17,7 @@ def getAction(distributions):
 def lossFunction(actionProbabilities, criticValues, entropy_param, entropy_sum, badReward):
     log_probabilities = [torch.log(prob) for prob in actionProbabilities]
     loss = -entropy_param*entropy_sum
-    print("La entropy_sum part es", torch.sum(loss)/len(loss))
+    print("La entropy_sum part es", loss)
     for i in range(len(actionProbabilities)):
         loss = loss - log_probabilities[i] * (badReward - criticValues[i].view(-1))
     print("La loss total es", torch.sum(loss)/len(loss))
@@ -142,6 +142,7 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
             # Empezamos la generación de la imágen (en 15 steps). Iremos guardando los criticValues y las probabilidades asociadas a las acciones
             probabilities = []
             criticValues = []
+            entropy_sum = 0
             for step in range(num_steps):
                 # Obtenemos el estado actual del environment
                 environmentStates = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width).cuda()
@@ -165,9 +166,10 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
                             [(torch.argmax(distribution[k]), distribution[k][torch.argmax(distribution[k])])
                              for distribution in distributions])
                 """AQUI TERMINA COMPROVACIÓN"""
+
                 entropies = torch.stack([torch.distributions.Categorical(distribution).entropy()
                                          for distribution in distributions], dim=1)
-                entropy_sum = torch.sum(entropies, dim=1) #Fusionar el sum i el stack
+                entropy_sum += entropies.sum()
                 actions = torch.stack([torch.distributions.Categorical(distribution).sample()
                                        for distribution in distributions], dim=1)
 
