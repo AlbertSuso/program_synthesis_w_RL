@@ -2,9 +2,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-"""INCLUIR DROPOUT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"""
-
 class MnistFeatureExtractor(nn.Module):
+    """INCLUIR DROPOUT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"""
     def __init__(self):
         super(MnistFeatureExtractor, self).__init__()
         self._conv1 = nn.Conv2d(1, 5, 5, padding=2)
@@ -50,7 +49,7 @@ class Block(nn.Module):
 class ResNet12(nn.Module):
     ''' In this network the input image is supposed to be 84x84x3 '''
 
-    def __init__(self, in_chanels=2, emb_size=512):
+    def __init__(self, in_chanels=1, emb_size=512):
         super(ResNet12, self).__init__()
         self.block1 = Block(in_chanels, 64)
         self.block2 = Block(64, 128)
@@ -60,13 +59,9 @@ class ResNet12(nn.Module):
         self.clasificator = nn.Linear(emb_size*9, 10)
 
     def forward(self, input):
-        # Input 84x84x3
         x = self.block1(input)
-        # Input 42x42x64
         x = self.block2(x)
-        # Input 20x20x128
         x = self.block3(x)
-        # Input 10x10x256
         x = self.block4(x, maxpool=False)
         x = x.view(-1, self.emb_size*9)
         return self.clasificator(x) if self.training else x
