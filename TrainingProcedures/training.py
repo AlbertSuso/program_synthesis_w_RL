@@ -13,11 +13,11 @@ def getAction(distributions):
     return [random.choices(list(range(len(distribution))), weights=distribution)[0] for distribution in distributions]
 
 
-def lossFunction(actionProbabilities, criticValues, entropy, badReward):
+def lossFunction(actionProbabilities, criticValues, entropy, reward):
     log_probabilities = [torch.log(prob) for prob in actionProbabilities]
     loss = -entropy
     for i in range(len(actionProbabilities)):
-        loss = loss - log_probabilities[i] * (badReward - criticValues[i].view(-1))
+        loss = loss - log_probabilities[i] * (reward - criticValues[i].view(-1))
     return torch.sum(loss)/len(loss)
 
 
@@ -54,6 +54,7 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
 
             running_loss += loss
             total += label.size(0)
+
             """
             if i % (10000//batch_size) == 10000//batch_size-1:
                 print("{}.{} La loss mitjana sobre les últimes {} dades és {}".format(epoch, i//(10000//batch_size), total, running_loss/total))
@@ -75,11 +76,11 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
                     eval_losses.append(running_loss/total)
                     running_loss = 0
                     total = 0
-            """
+            
 
     # print("\nEl pre-entrenament del feature extractor ha finalitzat\n")
 
-    """
+    
     plot1, = plt.plot(training_losses, 'r', label="train_loss")
     plot2, = plt.plot(eval_losses, 'b', label="eval_loss")
     plt.legend(handles=[plot1, plot2])
@@ -100,6 +101,7 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
 
     print("Accuracy of the network over the eval data is: ", (100 * correct / total))
     """
+
     feature_extractor.eval() #Elimina la capa de clasificación
 
 
