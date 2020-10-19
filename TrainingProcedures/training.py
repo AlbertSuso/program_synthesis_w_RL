@@ -1,6 +1,7 @@
 import torch
 import copy
 import random
+import torchvision
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -184,7 +185,7 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
 
                 entropies = torch.stack([torch.distributions.Categorical(distribution).entropy()
                                          for distribution in distributions], dim=1)
-                entropy_sum += entropies.sum()
+                entropy_sum += torch.prod(entropies, dim=1)
                 actions = torch.stack([torch.distributions.Categorical(distribution).sample()
                                        for distribution in distributions], dim=1)
 
@@ -240,6 +241,12 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
                 writer.add_scalar("Entropy/train", entropy, counter)
                 writer.add_scalar("non-entropy Loss/train", policyLoss + entropy, counter)
                 counter += 1
+
+
+            if i % int(len(traindataset) // batch_size) == int(len(traindataset) // batch_size)-1:
+                images = outputImages[0:16:5]
+                img_grid = torchvision.utils.make_grid(images)
+                writer.add_image('training_images', img_grid)
 
             """GUARDADO PERIODICO DEL REWARD SOBRE TRAINING Y EVAL"""
             if i % int((len(traindataset)//batch_size)//5) == int((len(traindataset)//batch_size)//5 - 1):
