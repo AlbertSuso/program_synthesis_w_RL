@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import Subset, DataLoader
 from torch.optim import Adam
+from torch.utils.tensorboard import SummaryWriter
 
 
 def getAction(distributions):
@@ -106,7 +107,11 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
 
 
 def train(environments, dataset, feature_extractor, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=0):
-    # print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE\n")
+    print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE\n")
+    print("Experiment #{} ---> num_steps={} batch_size={} num_epochs={} policy_learning_rate={} critic_learning_rate={} entropy_param={}".format(num_experiment, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param))
+
+    # Tensorboard writter
+    writer = SummaryWriter("graphics/experiment"+str(num_experiment))
 
     feature_extractor_policy = feature_extractor
     feature_extractor_critic = copy.deepcopy(feature_extractor)
@@ -129,20 +134,9 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
     policyOptimizer = optimizer(list(feature_extractor_policy.parameters())+list(policy.parameters()), lr=policy_learning_rate)
     criticOptimizer = optimizer(list(feature_extractor_critic.parameters())+list(critic.parameters()), lr=critic_learning_rate)
 
-    """LISTAS PARA ANALIZAR EL ENTRENO"""
+    """CONTADORES PARA EL GUARDADO DE DATOS EN TENSORBOARD"""
     counter = 0
     counter_reward = 0
-    # Valores de la parte de la loss correspondiente a la entropía durante el entrenamiento (en conjunto de training)
-    entropy_training = torch.empty(50*num_epochs, dtype=torch.float32).cuda() # 50 por época (if 50 veces)
-    # Valores de la parte de la loss no correspondientes a la entropía durante el entrenamiento (en conjunto de training)
-    non_entropy_loss_training = torch.empty(50*num_epochs, dtype=torch.float32).cuda() # 50 por época (if 100 veces)
-    # Valores del reward medio durante el entrenamiento en el conjunto de training
-    training_reward = torch.empty(5*num_epochs, dtype=torch.float32).cuda() # 5 por epoca
-    # Valores del reward medio durante el entrenamiento en el conjunto de evaluation
-    evaluation_reward = torch.empty(5*num_epochs, dtype=torch.float32).cuda() # 5 por epoca
-    # Probabilidad maxima de entre todas las acciones a lo largo del entrenamiento
-    max_probability = torch.empty((num_steps, 5, 50*num_epochs), dtype=torch.float32).cuda() # [num_steps*[5_imatges_tracking*[50*num_epochs]]]
-
 
     """AQUI GUARDAREMOS LOS PESOS DE LAS REDES EN SU MEJOR MOMENTO"""
     best_state_dict_policy = None
@@ -153,9 +147,10 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
 
     """EMPEZAMOS EL ENTRENAMIENTO"""
     policy_cummulative_reward = 0.0
+    critic_cummulative_loss = 0.0
 
     for epoch in range(num_epochs):
-        # print("Starting training epoch #{}".format(epoch))
+        print("Starting training epoch #{}".format(epoch))
         for i, data in enumerate(traindataloader):
             # Reseteamos los gradientes de las redes
             feature_extractor_policy.zero_grad()
@@ -207,11 +202,11 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
                     environment.step(environmentAction)
 
 
-                #Recopilación de datos par análisis de resultados
+                #Recopilación de datos para análisis de resultados
                 if i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
                     for k in range(batch_size // 5, batch_size, batch_size // 5):
-                        max_probability[step, int(k/(batch_size // 5)-1), counter] = np.prod(
-                            [torch.max(distribution[k]) for distribution in distributions])
+                        prob = np.prod([torch.max(distribution[k]) for distribution in distributions])
+                        # writer.add_scalar("Action with max probability in step#"+str(step) + "in sample#" + str(int(k/(batch_size // 5)-1)), prob, counter)
 
 
             # Obtenemos la loss de la policy y efectuamos un paso de descenso gradiente
@@ -222,15 +217,6 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
             policy_cummulative_reward += torch.sum(reward)
             policyLoss = lossFunction(probabilities, criticValues, entropy_param*entropy_sum, reward)
 
-
-            # Recopilación de datos para análisis de resultados
-            if i%int((len(traindataset)//batch_size)//50) == int((len(traindataset)//batch_size)//50 - 1):
-                entropy = entropy_param*entropy_sum
-                entropy_training[counter] = entropy
-                non_entropy_loss_training[counter] = policyLoss-entropy
-                counter += 1
-
-
             policyLoss.backward(retain_graph=True)
             policyOptimizer.step()
 
@@ -240,6 +226,7 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
 
             # Obtenemos la loss del critic y efectuamos un paso de descenso gradiente
             criticLoss = torch.nn.functional.mse_loss(torch.stack(criticValues, dim=0).reshape(num_steps, -1), torch.stack([reward]*num_steps, dim=0))
+            critic_cummulative_loss += torch.sum(criticLoss)
             criticLoss.backward()
             criticOptimizer.step()
 
@@ -247,12 +234,22 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
             for environment in environments:
                 environment.reset()
 
+            # Recopilación de datos para análisis de resultados
+            if i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
+                entropy = entropy_param * entropy_sum
+                writer.add_scalar("Entropy/train", entropy, counter)
+                writer.add_scalar("non-entropy Loss/train", policyLoss + entropy, counter)
+                counter += 1
+
             """GUARDADO PERIODICO DEL REWARD SOBRE TRAINING Y EVAL"""
             if i % int((len(traindataset)//batch_size)//5) == int((len(traindataset)//batch_size)//5 - 1):
-                """
-                training_reward[counter_reward] = (policy_cummulative_reward/(batch_size*((len(traindataset)//batch_size)//5)))
-                """
+                writer.add_scalar("training_mean_reward", policy_cummulative_reward/(batch_size*((len(traindataset)//batch_size)//5)), counter_reward)
+                writer.add_scalar("critic_loss",
+                                  critic_cummulative_loss / (batch_size * ((len(traindataset) // batch_size) // 5)),
+                                  counter_reward)
+
                 policy_cummulative_reward = 0
+                critic_cummulative_loss = 0
 
                 #Calculamos el reward medio sobre el evaluation dataset
                 with torch.no_grad():
@@ -286,14 +283,15 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
                         for environment in environments:
                             environment.reset()
 
-
-                    evaluation_reward.append[counter_reward] = (policy_cummulative_reward/((len(evaldataset)//batch_size)*batch_size))
+                    evaluation_reward = policy_cummulative_reward/((len(evaldataset)//batch_size)*batch_size)
+                    writer.add_scalar("eval_mean_reward", evaluation_reward, counter_reward)
                     counter_reward += 1
 
                     policy_cummulative_reward = 0
 
-                if evaluation_reward[-1] > best_reward:
-                    best_reward = evaluation_reward[-1]
+                if evaluation_reward > best_reward:
+                    print("Mejora en el reward obtenido! Epoca {}".format(epoch))
+                    best_reward = evaluation_reward
                     best_state_dict_policy = policy.state_dict()
                     best_state_dict_critic = critic.state_dict()
                     best_state_dict_feature_extractor_policy = feature_extractor_policy.state_dict()
@@ -348,41 +346,14 @@ def train(environments, dataset, feature_extractor, policy, critic, discriminato
     """GENERAMOS Y GUARDAMOS LAS GRÁFICAS PARA EL ANÁLISIS DEL ENTRENAMIENTO. GUARDAMOS LOS BEST STATE DICTS"""
 
     torch.save(best_state_dict_feature_extractor_critic,
-               "state_dicts\experiment"+str(num_experiment)+"_critic_feature_extractor")
+               "state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")
     torch.save(best_state_dict_feature_extractor_policy,
-               "state_dicts\experiment"+str(num_experiment)+"_policy_feature_extractor")
+               "state_dicts/experiment"+str(num_experiment)+"_policy_feature_extractor")
     torch.save(best_state_dict_critic,
-               "state_dicts\experiment"+str(num_experiment)+"_critic")
+               "state_dicts/experiment"+str(num_experiment)+"_critic")
     torch.save(best_state_dict_policy,
-               "state_dicts\experiment"+str(num_experiment)+"_policy")
+               "state_dicts/experiment"+str(num_experiment)+"_policy")
 
-    plot1, = plt.plot(entropy_training, 'r', label="entropy loss part")
-    plot2, = plt.plot(non_entropy_loss_training, 'b', label="non-entropy loss part")
-    plt.xlabel('50*Epoch')
-    plt.legend(handles=[plot1, plot2])
-    plt.savefig('graphics/experiment'+str(num_experiment)+'_entropy.png')
-
-    plt.clf()
-
-    plot1, = plt.plot(training_reward, 'r', label="training reward")
-    plot2, = plt.plot(evaluation_reward, 'b', label="eval reward")
-    plt.xlabel('5*Epoch')
-    plt.legend(handles=[plot1, plot2])
-    plt.savefig('graphics/experiment'+str(num_experiment)+'_reward.png')
-
-    plt.clf()
-
-    for step in range(num_steps):
-        plot1, = plt.plot(max_probability[step][0], 'r', label="image #1")
-        plot2, = plt.plot(max_probability[step][1], 'b', label="image #2")
-        plot3, = plt.plot(max_probability[step][2], 'g', label="image #3")
-        plot4, = plt.plot(max_probability[step][3], 'y', label="image #4")
-        plot5, = plt.plot(max_probability[step][4], 'm', label="image #5")
-
-        plt.xlabel('50*Epoch')
-        plt.legend(handles=[plot1, plot2, plot3, plot4, plot5])
-        plt.savefig('graphics/experiment' + str(num_experiment) + 'max_probability_action_#'+str(step+1)+'.png')
-
-        plt.clf()
+    writer.close()
 
     return best_reward
