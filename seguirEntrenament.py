@@ -27,7 +27,6 @@ parser.add_argument('-e', '--num_epochs', type=int)
 parser.add_argument('-plr', '--policy_learning_rate', type=float)
 parser.add_argument('-clr', '--critic_learning_rate', type=float)
 parser.add_argument('-ep', '--entropy_param', type=float)
-
 parser.add_argument('-sd', '--state_dicts', type=str)
 
 args = parser.parse_args()
@@ -39,13 +38,12 @@ num_epochs = args.num_epochs if args.num_epochs is not None else 2
 policy_learning_rate = args.policy_learning_rate if args.policy_learning_rate is not None else 0.001
 critic_learning_rate = args.critic_learning_rate if args.critic_learning_rate is not None else 0.001
 entropy_param = args.entropy_param if args.entropy_param is not None else 0.001
-state_dicts_path = args.state_dicts
 
 
 """AQUI FINALIZAN LOS HIPERPARAMETROS"""
 
 canvas_width = 28
-grid_width = 14
+grid_width = 28
 use_color = False
 brushes_basedir = '/home/albert/spiral/third_party/mypaint-brushes-1.3.0'
 brush_type = 'classic/calligraphy'
@@ -62,31 +60,15 @@ dataset = MNIST("/data2fast/users/asuso", train=True, download=False, transform=
     lambda x: x.float(),
 ]))
 
-if state_dicts_path is not None:
-    feature_extractor_critic = featureExtractors.ResNet12(in_chanels=1)
-    feature_extractor_policy = featureExtractors.ResNet12(in_chanels=1)
-    feature_extractor_critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")).cuda()
-    feature_extractor_policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy_feature_extractor")).cuda()
-
-    policy = policies.MnistPolicy()
-    policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy")).cuda()
-
-    critic = critics.Critic()
-    critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic")).cuda()
-
-else:
-    feature_extractor = featureExtractors.ResNet12(in_chanels=1)
-    feature_extractor.cuda()
-    preTrainFeatureExtractor(feature_extractor, dataset, 64, 3, optimizer=Adam, cuda=True)
-    feature_extractor_critic = feature_extractor
-    feature_extractor_policy = copy.deepcopy(feature_extractor)
-
-    policy = policies.MnistPolicy()
-    policy.cuda()
-
-    critic = critics.Critic()
-    critic.cuda()
-
-
+feature_extractor = featureExtractors.ResNet12(in_chanels=1)
+feature_extractor.cuda()
+policy = policies.MnistPolicy()
+policy.cuda()
+critic = critics.Critic()
+critic.cuda()
 discriminator = mse_per_batch
-train(environments, dataset, feature_extractor_critic, copy.deepcopy(feature_extractor_policy), policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
+
+
+preTrainFeatureExtractor(feature_extractor, dataset, 64, 3, optimizer=Adam, cuda=True)
+
+train(environments, dataset, feature_extractor, copy.deepcopy(feature_extractor), policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
