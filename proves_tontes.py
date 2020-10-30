@@ -1,1 +1,5 @@
-
+print(len(actionLogProbabilities))
+print(actionLogProbabilities[0].shape)
+print(len(criticValues))
+print(entropy.shape)
+print(reward.shape)

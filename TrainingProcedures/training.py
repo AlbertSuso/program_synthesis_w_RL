@@ -103,11 +103,14 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
 
 
 def train(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=0):
-    print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE\n")
+    print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE")
     print("Experiment #{} ---> num_steps={} batch_size={} num_epochs={} policy_learning_rate={} critic_learning_rate={} entropy_param={}".format(num_experiment, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param))
 
-    # Tensorboard writter
-    writer = SummaryWriter("graphics/experiment"+str(num_experiment))
+    debug = False
+
+    if debug:
+        # Tensorboard writter
+        writer = SummaryWriter("graphics/experiment"+str(num_experiment))
 
     # Obtenemos el formato deseado para las acciones
     environmentAction = copy.copy(environments[0].action_spec)
@@ -128,8 +131,9 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
     criticOptimizer = optimizer(list(feature_extractor_critic.parameters())+list(critic.parameters()), lr=critic_learning_rate)
 
     """CONTADORES PARA EL GUARDADO DE DATOS EN TENSORBOARD"""
-    counter = 0
-    counter_reward = 0
+    if debug:
+        counter = 0
+        counter_reward = 0
 
     """AQUI GUARDAREMOS LOS PESOS DE LAS REDES EN SU MEJOR MOMENTO"""
     best_state_dict_policy = None
@@ -182,7 +186,7 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
                 actions = torch.stack([torch.distributions.Categorical(distribution).sample()
                                        for distribution in distributions], dim=1)
 
-                # Calculamos la probabilidad de la acción obtenida
+                # Calculamos la log-probabilidad de la acción obtenida
                 actionLogProbabilities = torch.zeros(batch_size, dtype=torch.float32).cuda()
                 for sample in range(batch_size):
                     for j, act in enumerate(actions[sample]):
@@ -195,13 +199,13 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
                         environmentAction[key] = np.array(int(value), dtype=np.int32)
                     environment.step(environmentAction)
 
-            # Obtenemos la loss de la policy y efectuamos un paso de descenso gradiente
+            # Obtenemos el reward
             outputImages = torch.cat([torch.from_numpy(environment.observation()["canvas"]).cuda().reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width)
                                       for environment in environments], dim=0)
-
             reward = discriminator(outputImages, inputImages)
-
             policy_cummulative_reward += torch.sum(reward)
+
+            # Obtenemos la loss de la policy y efectuamos un paso de descenso gradiente
             policyLoss = lossFunction(probabilities, criticValues, entropy_param*entropy_sum, reward)
 
             policyLoss.backward(retain_graph=True)
@@ -222,23 +226,24 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
                 environment.reset()
 
             # Recopilación de datos para análisis de resultados
-            if i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
+            if debug and i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
                 entropy = entropy_param * entropy_sum
                 writer.add_scalar("Entropy/train", entropy, counter)
                 writer.add_scalar("non-entropy Loss/train", policyLoss + entropy, counter)
                 counter += 1
 
-            if i % int(len(traindataset) // batch_size) == int(len(traindataset) // batch_size)-1:
+            if debug and i % int(len(traindataset) // batch_size) == int(len(traindataset) // batch_size)-1:
                 images = outputImages[0:16:5]
                 img_grid = torchvision.utils.make_grid(images)
                 writer.add_image('training_images', img_grid)
 
             """GUARDADO PERIODICO DEL REWARD SOBRE TRAINING Y EVAL"""
             if i % int((len(traindataset)//batch_size)//5) == int((len(traindataset)//batch_size)//5 - 1):
-                writer.add_scalar("training_mean_reward", policy_cummulative_reward, counter_reward)
-                writer.add_scalar("critic_loss",
-                                  critic_cummulative_loss / (batch_size * ((len(traindataset) // batch_size) // 5)),
-                                  counter_reward)
+                if debug:
+                    writer.add_scalar("training_mean_reward", policy_cummulative_reward, counter_reward)
+                    writer.add_scalar("critic_loss",
+                                      critic_cummulative_loss / (batch_size * ((len(traindataset) // batch_size) // 5)),
+                                      counter_reward)
 
                 policy_cummulative_reward = 0
                 critic_cummulative_loss = 0
@@ -275,8 +280,9 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
                         for environment in environments:
                             environment.reset()
 
-                    writer.add_scalar("eval_mean_reward", policy_cummulative_reward, counter_reward)
-                    counter_reward += 1
+                    if debug:
+                        writer.add_scalar("eval_mean_reward", policy_cummulative_reward, counter_reward)
+                        counter_reward += 1
 
                 if policy_cummulative_reward > best_reward:
                     print("Mejora en el reward obtenido! Epoca {}".format(epoch))

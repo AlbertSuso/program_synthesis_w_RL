@@ -13,7 +13,7 @@ from torch.optim import Adam
 from TrainingProcedures.training import train, preTrainFeatureExtractor
 
 def mse_per_batch(inputs, outputs):
-    return torch.sum(inputs*outputs, dim=(1, 2)) / torch.sum(((inputs+outputs)-inputs*outputs), dim=(1, 2))
+    return torch.sum(inputs*outputs, dim=(1, 2, 3)) / torch.sum(((inputs+outputs)-inputs*outputs), dim=(1, 2, 3))
 
 
 """AQUI EMPIEZAN HIPERPARAMETROS. IMPLEMENTAR OPCIÓN DE SCRIPTING"""
