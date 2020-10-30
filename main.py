@@ -32,13 +32,13 @@ parser.add_argument('-sd', '--state_dicts', type=str)
 
 args = parser.parse_args()
 
-num_experiment = args.num_experiment if args.num_experiment is not None else 0
+num_experiment = args.num_experiment if args.num_experiment is not None else 31
 num_steps = args.num_steps if args.num_steps is not None else 5
 batch_size = args.batch_size if args.batch_size is not None else 32
-num_epochs = args.num_epochs if args.num_epochs is not None else 2
-policy_learning_rate = args.policy_learning_rate if args.policy_learning_rate is not None else 0.001
+num_epochs = args.num_epochs if args.num_epochs is not None else 5
+policy_learning_rate = args.policy_learning_rate if args.policy_learning_rate is not None else 0.0001
 critic_learning_rate = args.critic_learning_rate if args.critic_learning_rate is not None else 0.001
-entropy_param = args.entropy_param if args.entropy_param is not None else 0.001
+entropy_param = args.entropy_param if args.entropy_param is not None else 0.0001
 state_dicts_path = args.state_dicts
 
 
@@ -55,7 +55,7 @@ environments = [Environment(canvas_width, grid_width, brush_type, use_color, bru
                 for i in range(batch_size)]
 
 
-dataset = MNIST("/data2fast/users/asuso", train=True, download=False, transform=transforms.Compose([
+dataset = MNIST("datasets", train=True, download=False, transform=transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,)),
     lambda x: x > 0,
