@@ -228,33 +228,22 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
             # Recopilación de datos para análisis de resultados
             if debug and i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
                 entropy = entropy_param * entropy_sum
-                writer.add_scalar("Entropy/train", entropy, counter)
-                writer.add_scalar("non-entropy Loss/train", policyLoss + entropy, counter)
+                writer.add_scalar("Entropy", torch.sum(entropy)/len(entropy), counter)
+                writer.add_scalar("non-entropy Loss", policyLoss + torch.sum(entropy)/len(entropy), counter)
+                writer.add_scalar("Loss", policyLoss, counter)
                 counter += 1
 
-            if debug and i % int(len(traindataset) // batch_size) == int(len(traindataset) // batch_size)-1:
-                images = outputImages[0:16:5]
-                img_grid = torchvision.utils.make_grid(images)
-                writer.add_image('training_images', img_grid)
-
-                images = inputImages[0:16:5]
-                img_grid = torchvision.utils.make_grid(images)
-                writer.add_image('input_images', img_grid)
-
             """GUARDADO PERIODICO DEL REWARD SOBRE TRAINING Y EVAL"""
-            if i % int((len(traindataset)//batch_size)//5) == int((len(traindataset)//batch_size)//5 - 1):
-                if debug:
-                    writer.add_scalar("training_mean_reward", policy_cummulative_reward, counter_reward)
-                    writer.add_scalar("critic_loss",
-                                      critic_cummulative_loss / (batch_size * ((len(traindataset) // batch_size) // 5)),
-                                      counter_reward)
+            if debug and i % int((len(traindataset)//batch_size)//5) == int((len(traindataset)//batch_size)//5 - 1):
+                writer.add_scalar("training_mean_reward", policy_cummulative_reward/(batch_size*int((len(traindataset)//batch_size)//5)), counter_reward)
+                writer.add_scalar("critic_loss", critic_cummulative_loss, counter_reward)
 
                 policy_cummulative_reward = 0
                 critic_cummulative_loss = 0
 
                 #Calculamos el reward medio sobre el evaluation dataset
                 with torch.no_grad():
-                    for validateData in evaldataloader:
+                    for i, validateData in enumerate(evaldataloader):
                         inputImages = validateData[0].cuda()
                         inputFeatures = feature_extractor_policy(inputImages)
                         for step in range(num_steps):
@@ -284,8 +273,17 @@ def train(environments, dataset, feature_extractor_policy, feature_extractor_cri
                         for environment in environments:
                             environment.reset()
 
+                        if debug and i == 0:
+                            images = outputImages[0:16:5]
+                            img_grid = torchvision.utils.make_grid(images)
+                            writer.add_image('output_images', img_grid)
+
+                            images = inputImages[0:16:5]
+                            img_grid = torchvision.utils.make_grid(images)
+                            writer.add_image('input_images', img_grid)
+
                     if debug:
-                        writer.add_scalar("eval_mean_reward", policy_cummulative_reward, counter_reward)
+                        writer.add_scalar("eval_mean_reward", policy_cummulative_reward/10000, counter_reward)
                         counter_reward += 1
 
                 if policy_cummulative_reward > best_reward:
