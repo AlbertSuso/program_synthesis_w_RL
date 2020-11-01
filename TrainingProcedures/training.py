@@ -15,7 +15,7 @@ def lossFunction(actionLogProbabilities, criticValues, entropy, reward):
     loss = -entropy
     for i in range(len(actionLogProbabilities)):
         loss = loss - actionLogProbabilities[i] * (reward - criticValues[i].view(-1))
-    return torch.sum(loss)/len(loss)
+    return torch.sum(loss)
 
 
 def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs, optimizer=Adam, cuda=True):

@@ -19,4 +19,4 @@ class Critic(nn.Module):
         out = F.relu(self._fc2(out))
         out = F.relu(self._fc3(out))
         out = torch.cat((out, torch.tensor([episode_percentage]*out.shape[0], dtype=torch.float32, device="cuda").reshape(out.shape[0], 1)), dim=1)
-        return F.relu(self._output(out))
+        return F.sigmoid(self._output(out))

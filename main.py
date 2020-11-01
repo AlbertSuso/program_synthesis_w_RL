@@ -63,6 +63,7 @@ dataset = MNIST("datasets", train=True, download=False, transform=transforms.Com
 ]))
 
 if state_dicts_path is not None:
+    print("Retomando entrenamiento ya empezado")
     feature_extractor_critic = featureExtractors.ResNet12(in_chanels=1)
     feature_extractor_policy = featureExtractors.ResNet12(in_chanels=1)
     feature_extractor_critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")).cuda()
@@ -75,6 +76,7 @@ if state_dicts_path is not None:
     critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic")).cuda()
 
 else:
+    print("Entrenando desde cero")
     feature_extractor = featureExtractors.ResNet12(in_chanels=1)
     feature_extractor.cuda()
     preTrainFeatureExtractor(feature_extractor, dataset, 64, 3, optimizer=Adam, cuda=True)
@@ -89,4 +91,4 @@ else:
 
 
 discriminator = mse_per_batch
-train(environments, dataset, feature_extractor_critic, copy.deepcopy(feature_extractor_policy), policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
+train(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
