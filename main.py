@@ -10,7 +10,9 @@ import nets.policies as policies
 from torchvision.datasets import MNIST
 from LibMyPaint.LibMyPaint import Environment
 from torch.optim import Adam
-from TrainingProcedures.training import train, preTrainFeatureExtractor
+from TrainingProcedures.training import trainSimple
+from TrainingProcedures.trainingRecurrent import trainRecurrent
+from TrainingProcedures.preTraining import preTrainFeatureExtractor
 
 def mse_per_batch(inputs, outputs):
     return torch.sum(inputs*outputs, dim=(1, 2, 3)) / torch.sum(((inputs+outputs)-inputs*outputs), dim=(1, 2, 3))
@@ -54,6 +56,8 @@ environments = [Environment(canvas_width, grid_width, brush_type, use_color, bru
                           use_pressure=True, use_alpha=False, background="transparent", brushes_basedir=brushes_basedir)
                 for i in range(batch_size)]
 
+action_space_shapes = (environments[0]._action_spec[key].maximum+1 for key in environments[0]._action_spec)
+
 
 dataset = MNIST("datasets", train=True, download=False, transform=transforms.Compose([
     transforms.ToTensor(),
@@ -69,7 +73,7 @@ if state_dicts_path is not None:
     feature_extractor_critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")).cuda()
     feature_extractor_policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy_feature_extractor")).cuda()
 
-    policy = policies.MnistPolicy()
+    policy = policies.RNNPolicy(action_space_shapes, input_sizes=(9 * 512, 9 * 512, 5, 1), lstm_size=512, batch_size=batch_size)
     policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy")).cuda()
 
     critic = critics.Critic()
@@ -83,7 +87,7 @@ else:
     feature_extractor_critic = feature_extractor
     feature_extractor_policy = copy.deepcopy(feature_extractor)
 
-    policy = policies.MnistPolicy()
+    policy = policies.RNNPolicy(action_space_shapes, input_sizes=(9 * 512, 9 * 512, 5, 1), lstm_size=512, batch_size=batch_size)
     policy.cuda()
 
     critic = critics.Critic()
@@ -91,4 +95,4 @@ else:
 
 
 discriminator = mse_per_batch
-train(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
+trainRecurrent(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)

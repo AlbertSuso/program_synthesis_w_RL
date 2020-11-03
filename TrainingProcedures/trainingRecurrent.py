@@ -16,7 +16,7 @@ def lossFunction(actionLogProbabilities, criticValues, entropy, reward):
     return torch.sum(loss)
 
 
-def trainSimple(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=0):
+def trainRecurrent(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=0):
     print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE")
     print("Experiment #{} ---> num_steps={} batch_size={} num_epochs={} policy_learning_rate={} critic_learning_rate={} entropy_param={}".format(num_experiment, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param))
 
@@ -75,9 +75,10 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
             inputFeatures_critic = feature_extractor_critic(inputImages)
 
             # Empezamos la generación de la imagen (en 15 steps). Iremos guardando los criticValues y las probabilidades asociadas a las acciones
-            probabilities = []
+            log_probabilities = []
             criticValues = []
             entropy_sum = 0
+            actions = torch.zeros((batch_size, len(environments[0]._action_spec))).cuda()
             for step in range(num_steps):
                 # Obtenemos el estado actual del environment
                 environmentStates = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width).cuda()
@@ -91,21 +92,10 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                 criticValues.append(critic(canvasFeatures_critic, inputFeatures_critic, (step+1)/num_steps))
 
                 # Generamos la distribucion de probabilidades de la acción, y la usamos para obtener una acción concreta
-                distributions = policy(canvasFeatures_policy, inputFeatures_policy)
+                actions, entropy, log_probs = policy(canvasFeatures_policy, inputFeatures_policy, actions, (step+1)/num_steps)
 
-                entropies = torch.stack([torch.distributions.Categorical(distribution).entropy()
-                                         for distribution in distributions], dim=1)
-
-                entropy_sum += torch.sum(entropies, dim=1)
-                actions = torch.stack([torch.distributions.Categorical(distribution).sample()
-                                       for distribution in distributions], dim=1)
-
-                # Calculamos la log-probabilidad de la acción obtenida
-                actionLogProbabilities = torch.zeros(batch_size, dtype=torch.float32).cuda()
-                for sample in range(batch_size):
-                    for j, act in enumerate(actions[sample]):
-                        actionLogProbabilities[sample] += torch.log(distributions[j][sample, act])
-                probabilities.append(actionLogProbabilities)
+                entropy_sum = entropy_sum + entropy
+                log_probabilities.append(log_probs)
 
                 # Transformamos las acciones al formato aceptado por el environment y las efectuamos
                 for action, environment in zip(actions, environments):
@@ -120,7 +110,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
             policy_cummulative_reward += torch.sum(reward)
 
             # Obtenemos la loss de la policy y efectuamos un paso de descenso gradiente
-            policyLoss = lossFunction(probabilities, criticValues, entropy_param*entropy_sum, reward)
+            policyLoss = lossFunction(log_probabilities, criticValues, entropy_param*entropy_sum, reward)
 
             policyLoss.backward(retain_graph=True)
             policyOptimizer.step()
@@ -142,8 +132,8 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
             # Recopilación de datos para análisis de resultados
             if debug and i % int((len(traindataset) // batch_size) // 50) == int((len(traindataset) // batch_size) // 50 - 1):
                 entropy = entropy_param * entropy_sum
-                writer.add_scalar("Entropy", torch.sum(entropy)/len(entropy), counter)
-                writer.add_scalar("non-entropy Loss", policyLoss + torch.sum(entropy)/len(entropy), counter)
+                writer.add_scalar("Entropy", entropy, counter)
+                writer.add_scalar("non-entropy Loss", policyLoss + entropy/batch_size, counter)
                 writer.add_scalar("Loss", policyLoss, counter)
                 counter += 1
 
@@ -160,6 +150,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                     for i, validateData in enumerate(evaldataloader):
                         inputImages = validateData[0].cuda()
                         inputFeatures = feature_extractor_policy(inputImages)
+                        actions = torch.zeros((batch_size, len(environments[0]._action_spec)))
                         for step in range(num_steps):
                             environmentStates = torch.cat([torch.from_numpy(
                                 environment.observation()["canvas"]).reshape(1, environment.num_channels,
@@ -167,11 +158,13 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                                                                              environment.canvas_width).cuda()
                                                            for environment in environments], dim=0)
 
-                            canvasFeatures = feature_extractor_policy(environmentStates)
-                            distributions = policy(canvasFeatures, inputFeatures)
+                            # Obtenemos los features del estado actual del environment
+                            canvasFeatures_policy = feature_extractor_policy(environmentStates)
 
-                            actions = torch.stack([torch.distributions.Categorical(distribution).sample() for distribution in distributions], dim=1)
+                            # Generamos la distribucion de probabilidades de la acción, y la usamos para obtener una acción concreta
+                            actions, entropy, log_probs = policy(canvasFeatures_policy, inputFeatures, actions, (step+1)/num_steps)
 
+                            # Transformamos las acciones al formato aceptado por el environment y las efectuamos
                             for action, environment in zip(actions, environments):
                                 for key, value in zip(environmentAction, action):
                                     environmentAction[key] = np.array(int(value), dtype=np.int32)
@@ -218,9 +211,10 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
     # print("\nEmpezamos la prueba final sobre el conjunto de validación")
     policy_cummulative_reward = 0
     with torch.no_grad():
-        for validateData in evaldataloader:
+        for i, validateData in enumerate(evaldataloader):
             inputImages = validateData[0].cuda()
             inputFeatures = feature_extractor_policy(inputImages)
+            actions = torch.zeros((batch_size, len(environments[0]._action_spec)))
             for step in range(num_steps):
                 environmentStates = torch.cat([torch.from_numpy(
                     environment.observation()["canvas"]).reshape(1, environment.num_channels,
@@ -228,12 +222,13 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                                                                  environment.canvas_width).cuda()
                                                for environment in environments], dim=0)
 
-                canvasFeatures = feature_extractor_policy(environmentStates)
-                distributions = policy(canvasFeatures, inputFeatures)
+                # Obtenemos los features del estado actual del environment
+                canvasFeatures_policy = feature_extractor_policy(environmentStates)
 
-                actions = torch.stack(
-                    [torch.distributions.Categorical(distribution).sample() for distribution in distributions], dim=1)
+                # Generamos la distribucion de probabilidades de la acción, y la usamos para obtener una acción concreta
+                actions, entropy, log_probs = policy(canvasFeatures_policy, inputFeatures, actions, (step+1)/num_steps)
 
+                # Transformamos las acciones al formato aceptado por el environment y las efectuamos
                 for action, environment in zip(actions, environments):
                     for key, value in zip(environmentAction, action):
                         environmentAction[key] = np.array(int(value), dtype=np.int32)
