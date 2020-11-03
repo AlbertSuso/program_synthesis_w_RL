@@ -161,7 +161,7 @@ def trainRecurrent(environments, dataset, feature_extractor_policy, feature_extr
                             # Obtenemos los features del estado actual del environment
                             canvasFeatures_policy = feature_extractor_policy(environmentStates)
 
-                            # Generamos la distribucion de probabilidades de la acción, y la usamos para obtener una acción concreta
+                            # Ejecutamos la policy
                             actions, entropy, log_probs = policy(canvasFeatures_policy, inputFeatures, actions, (step+1)/num_steps)
 
                             # Transformamos las acciones al formato aceptado por el environment y las efectuamos
@@ -264,6 +264,7 @@ def trainRecurrent(environments, dataset, feature_extractor_policy, feature_extr
     torch.save(best_state_dict_policy,
                "state_dicts/experiment"+str(num_experiment)+"_policy")
 
-    writer.close()
+    if debug:
+        writer.close()
 
     return best_reward
