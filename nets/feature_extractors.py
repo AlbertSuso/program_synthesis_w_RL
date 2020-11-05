@@ -63,8 +63,11 @@ class ResNet12(nn.Module):
         x = self.block2(x)
         x = self.block3(x)
         x = self.block4(x, maxpool=False)
-        x = x.view(-1, self.emb_size*9)
-        return self.clasificator(x) if self.training else x
+
+        if self.training:
+            x = x.view(-1, self.emb_size*9)
+            return self.clasificator(x)
+        return x
 
 
 

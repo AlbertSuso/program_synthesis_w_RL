@@ -2,12 +2,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from nets.feature_extractors import Block
+
 
 class RNNPolicy(nn.Module):
-    def __init__(self, action_space_shapes, input_sizes=(9*512, 9*512, 8, 1), lstm_size=512, batch_size=64):
+    def __init__(self, action_space_shapes, input_sizes=(512, 512, 8, 1), lstm_size=512, batch_size=64):
         super(RNNPolicy, self).__init__()
 
-        features_size = sum(input_sizes)
+        features_size = 4*input_sizes[0]+input_sizes[2]+input_sizes[3]
+
+        self._ResNet = nn.Sequential(
+            Block(2*input_sizes[0], 3*input_sizes[0]),
+            Block(3*input_sizes[0], 4*input_sizes[0])
+        )
 
         # MLP inicial
         self._fc1 = nn.Sequential(
@@ -35,7 +42,10 @@ class RNNPolicy(nn.Module):
         self._autoregressiveDecoder = AutoregressiveDecoder(action_space_shapes, lstm_size, batch_size)
 
     def forward(self, actualCanvasFeatures, objectiveCanvasFeatures, last_action, episode_percentage):
-        features = torch.cat((actualCanvasFeatures, objectiveCanvasFeatures, last_action.cuda(), torch.tensor([episode_percentage]*self._h.shape[1]).view(-1, 1).cuda()), dim=1)
+        canvasFeatures = self._ResNet(torch.cat((actualCanvasFeatures, objectiveCanvasFeatures), dim=1))
+        canvasFeatures.view(self._h.shape[1], -1)
+
+        features = torch.cat((canvasFeatures, torch.tensor(last_action, dtype=torch.float32, device='cuda'), torch.tensor([episode_percentage]*self._h.shape[1], device='cuda').view(-1, 1)), dim=1)
         out_MLP = self._fc3(self._fc2(self._fc1(features)))
         out_MLP = out_MLP.view(1, self._h.shape[1], self._h.shape[2])
         seed, (self._h, self._c) = self._LSTM(out_MLP, (self._h, self._c))
@@ -65,13 +75,24 @@ class AutoregressiveDecoder(nn.Module):
             nn.ReLU())
         self._fc2 = nn.ModuleList([nn.Sequential(nn.Linear(input_size//2, out_size), nn.Softmax(dim=1)) for out_size in action_spaces_shapes])
 
+        self._MLP1 = nn.Sequential(
+            nn.Linear(1, 6),
+            nn.Dropout(0.35),
+            nn.ReLU(),
+            nn.Linear(6, 12),
+            nn.Dropout(0.15),
+            nn.ReLU(),
+            nn.Linear(12, 16),
+            nn.ReLU(),
+        )
+
         #Capa FC de output
         self._fcOutput = nn.Sequential(
-            nn.Linear(input_size+1, input_size),
+            nn.Linear(input_size+16, input_size),
             nn.ReLU())
 
     def forward(self, z):
-        action = torch.zeros((self._batch_size, 1), dtype=torch.float32, device='cuda')
+        action = torch.zeros((self._batch_size, 1), dtype=torch.int32, device='cuda')
         log_probabilities = torch.zeros(self._batch_size, dtype=torch.float32, device='cuda')
         entropy = 0
         for layer in self._fc2:
@@ -79,13 +100,15 @@ class AutoregressiveDecoder(nn.Module):
             distribution = layer(self._fc1(z))
             act = torch.distributions.Categorical(distribution).sample()
 
-            action = torch.cat((action, act.view(-1, 1)), dim=1)
+            action = torch.cat((action, torch.tensor(act, dtype=torch.int32, device='cuda').view(-1, 1)), dim=1)
             entropy = entropy + torch.sum(torch.distributions.Categorical(distribution).entropy())
             for i in range(self._batch_size):
                 log_probabilities[i] = log_probabilities[i] + torch.log(distribution[i, act[i]])
 
+            embedding_act = self._MLP1(torch.tensor(act, dtype=torch.float32, device='cuda').view(self._batch_size, 1))
+
             # Obtenemos la siguiente seed
-            z = self._fcOutput(torch.cat((z, act.view(self._batch_size, 1).cuda()), dim=1))
+            z = self._fcOutput(torch.cat((z, embedding_act), dim=1))
 
         action = action[:, 1:]
         return action.cpu(), entropy, log_probabilities

@@ -71,8 +71,8 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
 
             # Obtenemos una imagen y sus features
             inputImages = data[0].cuda()
-            inputFeatures_policy = feature_extractor_policy(inputImages)
-            inputFeatures_critic = feature_extractor_critic(inputImages)
+            inputFeatures_policy = feature_extractor_policy(inputImages).view(batch_size, -1)
+            inputFeatures_critic = feature_extractor_critic(inputImages).view(batch_size, -1)
 
             # Empezamos la generación de la imagen (en 15 steps). Iremos guardando los criticValues y las probabilidades asociadas a las acciones
             probabilities = []
@@ -84,8 +84,8 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                                      for environment in environments], dim=0)
 
                 # Obtenemos los features del estado actual del environment
-                canvasFeatures_policy = feature_extractor_policy(environmentStates)
-                canvasFeatures_critic = feature_extractor_critic(environmentStates)
+                canvasFeatures_policy = feature_extractor_policy(environmentStates).view(batch_size, -1)
+                canvasFeatures_critic = feature_extractor_critic(environmentStates).view(batch_size, -1)
 
                 # Obtenemos la valoración del crítico del estado actual del environment
                 criticValues.append(critic(canvasFeatures_critic, inputFeatures_critic, (step+1)/num_steps))
@@ -159,7 +159,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                 with torch.no_grad():
                     for i, validateData in enumerate(evaldataloader):
                         inputImages = validateData[0].cuda()
-                        inputFeatures = feature_extractor_policy(inputImages)
+                        inputFeatures = feature_extractor_policy(inputImages).view(batch_size, -1)
                         for step in range(num_steps):
                             environmentStates = torch.cat([torch.from_numpy(
                                 environment.observation()["canvas"]).reshape(1, environment.num_channels,
@@ -167,7 +167,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                                                                              environment.canvas_width).cuda()
                                                            for environment in environments], dim=0)
 
-                            canvasFeatures = feature_extractor_policy(environmentStates)
+                            canvasFeatures = feature_extractor_policy(environmentStates).view(batch_size, -1)
                             distributions = policy(canvasFeatures, inputFeatures)
 
                             actions = torch.stack([torch.distributions.Categorical(distribution).sample() for distribution in distributions], dim=1)
@@ -220,7 +220,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
     with torch.no_grad():
         for validateData in evaldataloader:
             inputImages = validateData[0].cuda()
-            inputFeatures = feature_extractor_policy(inputImages)
+            inputFeatures = feature_extractor_policy(inputImages).view(batch_size, -1)
             for step in range(num_steps):
                 environmentStates = torch.cat([torch.from_numpy(
                     environment.observation()["canvas"]).reshape(1, environment.num_channels,
@@ -228,7 +228,7 @@ def trainSimple(environments, dataset, feature_extractor_policy, feature_extract
                                                                  environment.canvas_width).cuda()
                                                for environment in environments], dim=0)
 
-                canvasFeatures = feature_extractor_policy(environmentStates)
+                canvasFeatures = feature_extractor_policy(environmentStates).view(batch_size, -1)
                 distributions = policy(canvasFeatures, inputFeatures)
 
                 actions = torch.stack(
