@@ -2,19 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from nets.feature_extractors import Block
+from nets.feature_extractors import ResNet2
 
 
 class RNNPolicy(nn.Module):
-    def __init__(self, action_space_shapes, input_sizes=(512, 512, 8, 1), lstm_size=512, batch_size=64):
+    def __init__(self, action_space_shapes, input_sizes=(512*9, 512*9, 8, 1), lstm_size=512, batch_size=64):
         super(RNNPolicy, self).__init__()
 
-        features_size = 4*input_sizes[0]+input_sizes[2]+input_sizes[3]
+        features_size = sum(input_sizes)
 
-        self._ResNet = nn.Sequential(
-            Block(2*input_sizes[0], 3*input_sizes[0]),
-            Block(3*input_sizes[0], 4*input_sizes[0])
-        )
+        self._ResNet = ResNet2(in_chanels=256, emb_size=1024)
 
         # MLP inicial
         self._fc1 = nn.Sequential(
@@ -42,10 +39,10 @@ class RNNPolicy(nn.Module):
         self._autoregressiveDecoder = AutoregressiveDecoder(action_space_shapes, lstm_size, batch_size)
 
     def forward(self, actualCanvasFeatures, objectiveCanvasFeatures, last_action, episode_percentage):
-        canvasFeatures = self._ResNet(torch.cat((actualCanvasFeatures, objectiveCanvasFeatures), dim=1))
-        canvasFeatures.view(self._h.shape[1], -1)
+        features_maps = torch.cat((actualCanvasFeatures, objectiveCanvasFeatures), dim=1)
+        out = self._ResNet(features_maps)
 
-        features = torch.cat((canvasFeatures, torch.tensor(last_action, dtype=torch.float32, device='cuda'), torch.tensor([episode_percentage]*self._h.shape[1], device='cuda').view(-1, 1)), dim=1)
+        features = torch.cat((out, torch.tensor(last_action, dtype=torch.float32, device='cuda'), torch.tensor([episode_percentage]*self._h.shape[1], device='cuda').view(-1, 1)), dim=1)
         out_MLP = self._fc3(self._fc2(self._fc1(features)))
         out_MLP = out_MLP.view(1, self._h.shape[1], self._h.shape[2])
         seed, (self._h, self._c) = self._LSTM(out_MLP, (self._h, self._c))

@@ -1,24 +1,5 @@
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
-
-class MnistFeatureExtractor(nn.Module):
-    """INCLUIR DROPOUT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"""
-    def __init__(self):
-        super(MnistFeatureExtractor, self).__init__()
-        self._conv1 = nn.Conv2d(1, 5, 5, padding=2)
-        self._conv2 = nn.Conv2d(5, 30, 3, padding=1)
-        self._conv3 = nn.Conv2d(30, 90, 3, padding=1)
-        self._pool = nn.MaxPool2d(2)
-        self._fc1 = nn.Linear(7 * 7 * 90, 1500)
-        self._fc2 = nn.Linear(1500, 500)
-        self._fc3 = nn.Linear(500, 300)
-
-    def forward(self, x):
-        features = self._pool(F.relu(self._conv1(x)))
-        features = self._pool(F.relu(self._conv2(features)))
-        features = F.relu(self._conv3(features))
-        return features.view(-1, 7 * 7 * 90)
 
 
 class Block(nn.Module):
@@ -46,46 +27,30 @@ class Block(nn.Module):
         return x
 
 
-class ResNet12(nn.Module):
-    ''' In this network the input image is supposed to be 84x84x3 '''
-
-    def __init__(self, in_chanels=1, emb_size=512):
-        super(ResNet12, self).__init__()
+class ResNet1(nn.Module):
+    def __init__(self, in_chanels=1, emb_size=128):
+        super(ResNet1, self).__init__()
         self.block1 = Block(in_chanels, 64)
-        self.block2 = Block(64, 128)
-        self.block3 = Block(128, 256)
-        self.block4 = Block(256, emb_size)
+        self.block2 = Block(64, emb_size)
         self.emb_size = emb_size
-        self.clasificator = nn.Linear(emb_size*9, 10)
+        self.clasificator = nn.Linear(emb_size*49, 10)
 
     def forward(self, input):
         x = self.block1(input)
         x = self.block2(x)
-        x = self.block3(x)
-        x = self.block4(x, maxpool=False)
 
-        if self.training:
-            x = x.view(-1, self.emb_size*9)
-            return self.clasificator(x)
-        return x
+        return self.clasificator(x.view(-1, self.emb_size*49)) if self.training else x
 
 
+class ResNet2(nn.Module):
+    def __init__(self, in_chanels=256, emb_size=1024):
+        super(ResNet2, self).__init__()
+        self.block1 = Block(in_chanels, 512)
+        self.block2 = Block(512, 1024)
+        self.emb_size = emb_size
 
-class PreTrainedFeatureExtractor(nn.Module):
-    def __init__(self, pretrained_net=models.vgg11_bn(pretrained=True)):
-        super(PreTrainedFeatureExtractor, self).__init__()
-        self._extractor = pretrained_net
-        for param in self._extractor.parameters():
-            param.requires_grad = False
-        self._extractor.classifier = nn.Flatten()
+    def forward(self, input):
+        x = self.block1(input)
+        x = self.block2(x, maxpool=False)
 
-    def forward(self, x):
-        return self._extractor(x)
-
-    def requires_grad(self, flag):
-        if flag:
-            for param in self._extractor.parameters():
-                param.requires_grad = True
-        else:
-            for param in self._extractor.parameters():
-                param.requires_grad = False
+        return x.view(-1, self.emb_size*9)

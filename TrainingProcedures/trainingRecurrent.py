@@ -84,6 +84,7 @@ def trainRecurrent(environments, dataset, feature_extractor_policy, feature_extr
                 environmentStates = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width).cuda()
                                      for environment in environments], dim=0)
 
+
                 # Obtenemos los features del estado actual del environment
                 canvasFeatures_policy = feature_extractor_policy(environmentStates)
                 canvasFeatures_critic = feature_extractor_critic(environmentStates)

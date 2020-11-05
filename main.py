@@ -68,8 +68,8 @@ dataset = MNIST("datasets", train=True, download=False, transform=transforms.Com
 
 if state_dicts_path is not None:
     print("Retomando entrenamiento ya empezado")
-    feature_extractor_critic = featureExtractors.ResNet12(in_chanels=1)
-    feature_extractor_policy = featureExtractors.ResNet12(in_chanels=1)
+    feature_extractor_critic = featureExtractors.ResNet1(in_chanels=1)
+    feature_extractor_policy = featureExtractors.ResNet1(in_chanels=1)
     feature_extractor_critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")).cuda()
     feature_extractor_policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy_feature_extractor")).cuda()
 
@@ -81,7 +81,7 @@ if state_dicts_path is not None:
 
 else:
     print("Entrenando desde cero")
-    feature_extractor = featureExtractors.ResNet12(in_chanels=1)
+    feature_extractor = featureExtractors.ResNet1(in_chanels=1)
     feature_extractor.cuda()
     preTrainFeatureExtractor(feature_extractor, dataset, 64, 3, optimizer=Adam, cuda=True)
     feature_extractor_critic = feature_extractor
