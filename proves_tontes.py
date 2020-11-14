@@ -1,4 +1,9 @@
 import torch
+import copy
 
-a = torch.tensor([0.2, 0.4, 1.2], dtype=torch.int64)
+a = (i for i in range(5))
+
+print(a[0])
+
+
 

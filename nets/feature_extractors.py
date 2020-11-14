@@ -27,30 +27,27 @@ class Block(nn.Module):
         return x
 
 
-class ResNet1(nn.Module):
-    def __init__(self, in_chanels=1, emb_size=128):
-        super(ResNet1, self).__init__()
+class ResNet12(nn.Module):
+    def __init__(self, in_chanels=2, emb_size=512):
+        super(ResNet12, self).__init__()
         self.block1 = Block(in_chanels, 64)
-        self.block2 = Block(64, emb_size)
+        self.block2 = Block(64, 128)
+        self.block3 = Block(128, 256)
+        self.block4 = Block(256, emb_size)
         self.emb_size = emb_size
-        self.clasificator = nn.Linear(emb_size*49, 10)
 
-    def forward(self, input):
-        x = self.block1(input)
+        self.pretraining = True
+        self.fc = nn.Linear(emb_size*8*8, 10)
+
+    def forward(self, x):
+        # Input 64x64x2
+        x = self.block1(x)
+        # Input 32x32x64
         x = self.block2(x)
+        # Input 16x16x128
+        x = self.block3(x)
+        # Input 8x8x256
+        x = self.block4(x, maxpool=False)
 
-        return self.clasificator(x.view(-1, self.emb_size*49)) if self.training else x
+        return self.fc(x.view(x.shape[0], -1)) if self.pretraining else x
 
-
-class ResNet2(nn.Module):
-    def __init__(self, in_chanels=256, emb_size=1024):
-        super(ResNet2, self).__init__()
-        self.block1 = Block(in_chanels, 512)
-        self.block2 = Block(512, 1024)
-        self.emb_size = emb_size
-
-    def forward(self, input):
-        x = self.block1(input)
-        x = self.block2(x, maxpool=False)
-
-        return x.view(-1, self.emb_size*9)

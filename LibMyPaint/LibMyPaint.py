@@ -150,7 +150,7 @@ class Environment:
         # Parámetros asociados a la brush. De ellos, los que son parámetros del objeto
         # BrushWrapper() contenido en self._brush son x,y,hue,saturation,value,log_size.
         hue, saturation, value = utils.rgb_to_hsv(self.R_VALUES[0], self.G_VALUES[0], self.B_VALUES[0])
-        pressure = 0.0 if self._use_pressure else 1.0
+        pressure = 0.0 if self._use_pressure else 1
         self._brush_params = collections.OrderedDict([
             ("y", 0.0),
             ("x", 0.0),
@@ -313,7 +313,7 @@ class Environment:
         red, green, blue = (0.0, 0.0, 0.0) if self._background == 'white' else (1.0, 1.0, 1.0)
         hue, saturation, value = utils.rgb_to_hsv(red, green, blue)
 
-        pressure = 0.0 if self._use_pressure else 1.0
+        pressure = 0.0 if self._use_pressure else 1
         self._brush_params = collections.OrderedDict([
             ("y", 0.0),
             ("x", 0.0),

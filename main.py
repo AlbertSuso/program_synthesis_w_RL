@@ -14,7 +14,7 @@ from TrainingProcedures.training import trainSimple
 from TrainingProcedures.trainingRecurrent import trainRecurrent
 from TrainingProcedures.preTraining import preTrainFeatureExtractor
 
-def mse_per_batch(inputs, outputs):
+def reward(inputs, outputs):
     return torch.sum(inputs*outputs, dim=(1, 2, 3)) / torch.sum(((inputs+outputs)-inputs*outputs), dim=(1, 2, 3))
 
 
@@ -35,7 +35,7 @@ parser.add_argument('-sd', '--state_dicts', type=str)
 args = parser.parse_args()
 
 num_experiment = args.num_experiment if args.num_experiment is not None else 31
-num_steps = args.num_steps if args.num_steps is not None else 5
+num_steps = args.num_steps if args.num_steps is not None else 10
 batch_size = args.batch_size if args.batch_size is not None else 32
 num_epochs = args.num_epochs if args.num_epochs is not None else 5
 policy_learning_rate = args.policy_learning_rate if args.policy_learning_rate is not None else 0.0001
@@ -46,20 +46,21 @@ state_dicts_path = args.state_dicts
 
 """AQUI FINALIZAN LOS HIPERPARAMETROS"""
 
-canvas_width = 28
-grid_width = 14
+canvas_width = 64
+grid_width = 32
 use_color = False
 brushes_basedir = '/home/albert/spiral/third_party/mypaint-brushes-1.3.0'
 brush_type = 'classic/calligraphy'
 
-environments = [Environment(canvas_width, grid_width, brush_type, use_color, brush_sizes=torch.linspace(1, 3, 20),
-                          use_pressure=True, use_alpha=False, background="transparent", brushes_basedir=brushes_basedir)
+environments = [Environment(canvas_width, grid_width, brush_type, use_color, brush_sizes=torch.linspace(1.2, 3, 10),
+                          use_pressure=False, use_alpha=False, background="transparent", brushes_basedir=brushes_basedir)
                 for i in range(batch_size)]
 
-action_space_shapes = (environments[0]._action_spec[key].maximum+1 for key in environments[0]._action_spec)
+action_space_shapes = [environments[0]._action_spec[key].maximum+1 for key in environments[0]._action_spec]
 
 
 dataset = MNIST("datasets", train=True, download=False, transform=transforms.Compose([
+    transforms.Resize((64, 64)),
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,)),
     lambda x: x > 0,
@@ -68,31 +69,32 @@ dataset = MNIST("datasets", train=True, download=False, transform=transforms.Com
 
 if state_dicts_path is not None:
     print("Retomando entrenamiento ya empezado")
-    feature_extractor_critic = featureExtractors.ResNet1(in_chanels=1)
-    feature_extractor_policy = featureExtractors.ResNet1(in_chanels=1)
+    feature_extractor_critic = featureExtractors.ResNet12(in_chanels=2)
+    feature_extractor_policy = featureExtractors.ResNet12(in_chanels=2)
     feature_extractor_critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic_feature_extractor")).cuda()
     feature_extractor_policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy_feature_extractor")).cuda()
 
-    policy = policies.RNNPolicy(action_space_shapes, input_sizes=(9 * 512, 9 * 512, 5, 1), lstm_size=512, batch_size=batch_size)
+    policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512, batch_size=batch_size)
     policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy")).cuda()
 
-    critic = critics.Critic()
+    critic = critics.Critic(num_steps, feature_extractor_critic)
     critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic")).cuda()
 
 else:
     print("Entrenando desde cero")
-    feature_extractor = featureExtractors.ResNet1(in_chanels=1)
+    feature_extractor = featureExtractors.ResNet12(in_chanels=2)
     feature_extractor.cuda()
-    preTrainFeatureExtractor(feature_extractor, dataset, 64, 3, optimizer=Adam, cuda=True)
+    preTrainFeatureExtractor(feature_extractor, dataset, 64, 5, optimizer=Adam, cuda=True)
+    feature_extractor.pretraining = False
     feature_extractor_critic = feature_extractor
     feature_extractor_policy = copy.deepcopy(feature_extractor)
 
-    policy = policies.RNNPolicy(action_space_shapes, input_sizes=(9 * 512, 9 * 512, 5, 1), lstm_size=512, batch_size=batch_size)
+    policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512, batch_size=batch_size)
     policy.cuda()
 
-    critic = critics.Critic()
+    critic = critics.Critic(num_steps, feature_extractor_critic)
     critic.cuda()
 
 
-discriminator = mse_per_batch
-trainRecurrent(environments, dataset, feature_extractor_policy, feature_extractor_critic, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
+discriminator = reward
+trainRecurrent(environments, dataset, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)

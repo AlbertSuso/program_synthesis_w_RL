@@ -1,6 +1,7 @@
+import copy
 import torch
 import torch.nn as nn
-
+import matplotlib.pyplot as plt
 
 from torch.utils.data import Subset, DataLoader
 from torch.optim import Adam
@@ -27,7 +28,15 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
     total = 0
     for epoch in range(num_epochs):
         for i, data in enumerate(traindataloader):
-            data, label = data
+            data1, label = data
+            # Dupliquem les dades (ja que la xarxa espera una entrada amb dos canals), però apliquem una
+            # máscara per tal de que tots els parámetres de la xarxa aprenguin.
+            data2 = copy.deepcopy(data1)
+            mask = torch.randint(0, 2, data1.shape)
+            data1[mask == 0] = 0
+            data2[mask == 1] = 0
+            data = torch.cat((data1, data2), dim=1)
+
             if cuda:
                 data = data.cuda()
                 label = label.cuda()
@@ -48,7 +57,12 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
                 total = 0
 
                 with torch.no_grad():
-                    for data, label in evaldataloader:
+                    for data1, label in evaldataloader:
+                        data2 = copy.deepcopy(data1)
+                        mask = torch.randint(0, 2, data1.shape)
+                        data1[mask == 0] = 0
+                        data2[mask == 1] = 0
+                        data = torch.cat((data1, data2), dim=1)
                         if cuda:
                             data = data.cuda()
                             label = label.cuda()
@@ -74,7 +88,12 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
     correct = 0
     total = 0
     with torch.no_grad():
-        for inputs, labels in evaldataloader:
+        for inputs1, labels in evaldataloader:
+            inputs2 = copy.deepcopy(inputs1)
+            mask = torch.randint(0, 2, inputs1.shape)
+            inputs1[mask == 0] = 0
+            inputs2[mask == 1] = 0
+            inputs = torch.cat((inputs1, inputs2), dim=1)
             if cuda:
                inputs, labels = inputs.cuda(), labels.cuda()
 
@@ -86,5 +105,4 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
 
     print("Accuracy of the network over the eval data is: ", (100 * correct / total))
     """
-
-    feature_extractor.eval()  # Elimina la capa de clasificación
+    feature_extractor.eval()
