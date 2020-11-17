@@ -83,18 +83,18 @@ if state_dicts_path is not None:
 else:
     print("Entrenando desde cero")
     feature_extractor = featureExtractors.ResNet12(in_chanels=2)
-    feature_extractor.cuda()
-    preTrainFeatureExtractor(feature_extractor, dataset, 64, 5, optimizer=Adam, cuda=True)
+    feature_extractor = preTrainFeatureExtractor(feature_extractor, dataset, 64, 5, optimizer=Adam,
+                                                 cuda=True)
     feature_extractor.pretraining = False
     feature_extractor_critic = feature_extractor
     feature_extractor_policy = copy.deepcopy(feature_extractor)
 
-    policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512, batch_size=batch_size)
-    policy.cuda()
-
+    policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512,
+                                batch_size=batch_size)
     critic = critics.Critic(num_steps, feature_extractor_critic)
-    critic.cuda()
 
 
 discriminator = reward
-trainRecurrent(environments, dataset, policy, critic, discriminator, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param, optimizer=Adam, num_experiment=num_experiment)
+trainRecurrent(environments, dataset, policy, critic, discriminator, num_steps, batch_size,
+               num_epochs, policy_learning_rate, critic_learning_rate, entropy_param,
+               optimizer=Adam, num_experiment=num_experiment)

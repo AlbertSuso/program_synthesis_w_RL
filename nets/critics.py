@@ -31,9 +31,7 @@ class Critic(nn.Module):
         features_maps = torch.cat((actualCanvas, objectiveCanvas), dim=1)
         features_vector = self._feature_extractor(features_maps).view(batch_size, -1)
 
-        episode_percentage_embedding = self._episode_percentage_embedding(torch.tensor([episode_percentage]*batch_size,
-                                                                                       dtype=torch.long,
-                                                                                       device='cuda'))
+        episode_percentage_embedding = self._episode_percentage_embedding(episode_percentage)
 
         x = torch.cat((features_vector, episode_percentage_embedding), dim=1)
         return self._fc3(self._fc2(self._fc1(x)))

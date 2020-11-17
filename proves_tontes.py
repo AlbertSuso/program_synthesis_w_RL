@@ -1,9 +1,10 @@
 import torch
 import copy
 
-a = (i for i in range(5))
+a = torch.zeros(3)
 
-print(a[0])
+a = a+5
+print(a)
 
 
 

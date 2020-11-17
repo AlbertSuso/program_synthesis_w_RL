@@ -9,6 +9,9 @@ from torch.optim import Adam
 
 def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs, optimizer=Adam, cuda=True):
     # print("Començem el pre-entrenament del feature extractor\n")
+    if cuda:
+        gpu = torch.device("cuda:0")
+        feature_extractor = feature_extractor.to(gpu)
     feature_extractor.train()
     torch.manual_seed(0)
     idxs = torch.randperm(len(dataset))
@@ -38,8 +41,8 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
             data = torch.cat((data1, data2), dim=1)
 
             if cuda:
-                data = data.cuda()
-                label = label.cuda()
+                data = data.to(gpu)
+                label = label.to(gpu)
             output = feature_extractor(data)
             loss = criterion(output, label)
             loss.backward()
@@ -106,3 +109,4 @@ def preTrainFeatureExtractor(feature_extractor, dataset, batch_size, num_epochs,
     print("Accuracy of the network over the eval data is: ", (100 * correct / total))
     """
     feature_extractor.eval()
+    return feature_extractor.cpu()

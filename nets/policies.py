@@ -37,8 +37,8 @@ class RNNPolicy(nn.Module):
         self._LSTM = nn.LSTM(input_size=lstm_size, hidden_size=lstm_size, num_layers=1, dropout=0)
 
         # Hidden states actuales del LSTM
-        self._h = torch.zeros((1, batch_size, lstm_size), device='cuda')
-        self._c = torch.zeros((1, batch_size, lstm_size), device='cuda')
+        self._h = torch.zeros((1, batch_size, lstm_size))
+        self._c = torch.zeros((1, batch_size, lstm_size))
 
         # Autoregressive decoder
         self._autoregressiveDecoder = AutoregressiveDecoder(action_space_shapes, lstm_size, batch_size)
@@ -47,9 +47,8 @@ class RNNPolicy(nn.Module):
         features_maps = torch.cat((actualCanvas, objectiveCanvas), dim=1)
         features_vector = self._feature_extractor(features_maps).view(self._h.shape[1], -1)
 
-        last_action_end_position_embedding = self._end_position_embedding(last_action_end_position.cuda())
-        episode_percentage_embedding = self._episode_percentage_embedding(torch.tensor([episode_percentage]*self._h.shape[1],
-                                                                                       dtype=torch.long, device='cuda'))
+        last_action_end_position_embedding = self._end_position_embedding(last_action_end_position)
+        episode_percentage_embedding = self._episode_percentage_embedding(episode_percentage)
 
         features = torch.cat((features_vector, last_action_end_position_embedding, episode_percentage_embedding), dim=1)
 
@@ -58,8 +57,8 @@ class RNNPolicy(nn.Module):
         seed, (self._h, self._c) = self._LSTM(out_MLP, (self._h, self._c))
 
         if episode_percentage == self.num_steps-1:
-            self._h = torch.zeros(self._h.shape, device='cuda')
-            self._c = torch.zeros(self._c.shape, device='cuda')
+            self._h = torch.zeros(self._h.shape, device=self._h.device)
+            self._c = torch.zeros(self._c.shape, device=self._c.device)
 
         action, entropy, log_probabilities = self._autoregressiveDecoder(seed.view(self._h.shape[1], -1))
         return action, entropy, log_probabilities
@@ -88,15 +87,15 @@ class AutoregressiveDecoder(nn.Module):
             nn.ReLU())
 
     def forward(self, z):
-        action = torch.zeros((self._batch_size, 1), dtype=torch.long, device='cuda')
-        log_probabilities = torch.zeros(self._batch_size, dtype=torch.float32, device='cuda')
+        action = torch.zeros((self._batch_size, 1), dtype=torch.long, device=self.device)
+        log_probabilities = torch.zeros(self._batch_size, dtype=torch.float32, device=self.device)
         entropy = 0
         for mlp, embedding in zip(self._fc1, self._embeddings):
             # Sampleamos la sub-acción
             distribution = mlp(z)
             act = torch.distributions.Categorical(distribution).sample()
 
-            action = torch.cat((action, torch.tensor(act, dtype=torch.int32, device='cuda').view(-1, 1)), dim=1)
+            action = torch.cat((action, torch.tensor(act, dtype=torch.long, device=self.device).view(-1, 1)), dim=1)
             entropy = entropy + torch.sum(torch.distributions.Categorical(distribution).entropy())
             for i in range(self._batch_size):
                 log_probabilities[i] = log_probabilities[i] + torch.log(distribution[i, act[i]])

@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 def lossFunction(actionLogProbabilities, criticValues, entropy, reward, delta=0.6):
     batch_size = actionLogProbabilities[0].shape[0]
     num_steps = len(actionLogProbabilities)
-    rewards = torch.zeros((batch_size, num_steps), dtype=torch.float32, device='cuda')
+    rewards = torch.zeros((batch_size, num_steps), dtype=torch.float32, device=reward.device)
 
     loss = -entropy
     for i in range(num_steps):
@@ -28,8 +28,12 @@ def trainRecurrent(environments, dataset, policy, critic, discriminator, num_ste
     print("\n\n\n EMPIEZA EL ENTRENAMIENTO DEL AGENTE")
     print("Experiment #{} ---> num_steps={} batch_size={} num_epochs={} policy_learning_rate={} critic_learning_rate={} entropy_param={}".format(num_experiment, num_steps, batch_size, num_epochs, policy_learning_rate, critic_learning_rate, entropy_param))
 
-    torch.autograd.set_detect_anomaly(True)
     debug = False
+
+    gpu1 = torch.device("cuda:0")
+    gpu2 = torch.device("cuda:1")
+    policy.to(gpu1)
+    critic.to(gpu2)
 
     if debug:
         # Tensorboard writter
@@ -74,33 +78,37 @@ def trainRecurrent(environments, dataset, policy, critic, discriminator, num_ste
             policy.zero_grad()
             critic.zero_grad()
 
-            # Obtenemos una imagen y sus features
-            objective_canvas = data[0].cuda()
+            # Obtenemos las imágenes del batch
+            objective_canvas_policy = data[0].to(gpu1)
+            objective_canvas_critic = data[0].to(gpu2)
 
             # Empezamos la generación de la imagen (en 15 steps).
             # Iremos guardando los criticValues y las probabilidades asociadas a las acciones
             log_probabilities = []
             critic_values = []
-            rewards = torch.zeros((batch_size, num_steps), device='cuda')
+            rewards = torch.zeros((batch_size, num_steps), device=gpu2)
             entropy_sum = 0
             actions = torch.zeros((batch_size, len(environments[0].action_spec)), dtype=torch.long).cuda()
             reward = 0
+            step_critic = torch.zeros(batch_size, dtype=torch.long, device=gpu2)
+            step_policy = torch.zeros(batch_size, dtype=torch.long, device=gpu1)
             for step in range(num_steps):
                 # Obtenemos el estado actual del environment
                 actual_canvas = torch.cat([torch.from_numpy(environment.observation()["canvas"])
-                                              .reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width)
-                                              .cuda()
-                                               for environment in environments], dim=0)
+                                          .reshape(1, environment.num_channels, environment.canvas_width, environment.canvas_width)
+                                           for environment in environments], dim=0)
+                actual_canvas_policy = actual_canvas.to(gpu1)
+                actual_canvas_critic = actual_canvas.to(gpu2)
 
                 # Obtenemos la valoración del crítico del estado actual del environment
-                critic_values.append(critic(actual_canvas, objective_canvas, step))
+                critic_values.append(critic(actual_canvas_critic, objective_canvas_critic, step_critic))
 
                 # Generamos la distribucion de probabilidades de la acción, y la usamos para obtener una acción concreta
-                last_action_end_position = actions[:, 1]
-                actions, entropy, log_probs = policy(actual_canvas, objective_canvas, last_action_end_position, step)
+                last_action_end_position = actions[:, 1].to(gpu1)
+                actions, entropy, log_probs = policy(actual_canvas_policy, objective_canvas_policy, last_action_end_position, step_policy)
 
                 entropy_sum = entropy_sum + entropy
-                log_probabilities.append(log_probs)
+                log_probabilities.append(log_probs.to(gpu2))
 
                 # Transformamos las acciones al formato aceptado por el environment y las efectuamos
                 for action, environment in zip(actions, environments):
@@ -109,13 +117,18 @@ def trainRecurrent(environments, dataset, policy, critic, discriminator, num_ste
                     environment.step(environmentAction)
 
                 # Obtenemos el reward
-                output_images = torch.cat([torch.from_numpy(environment.observation()["canvas"]).cuda().reshape(1, environment.num_channels,
-                                                                                                               environment.canvas_width,
-                                                                                                               environment.canvas_width)
-                                          for environment in environments], dim=0)
+                output_images = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(1, environment.num_channels,
+                                                                                                         environment.canvas_width,
+                                                                                                         environment.canvas_width)
+                                           for environment in environments], dim=0)
+                output_images.to(gpu2)
+
                 old_reward = reward
-                reward = discriminator(output_images, objective_canvas)
+                reward = discriminator(output_images, objective_canvas_critic)
                 rewards[:, step] = reward-old_reward
+
+                step_critic = step_critic+1
+                step_policy = step_policy+1
 
             # Actualizamos el reward
             policy_cummulative_reward += torch.sum(reward)
@@ -155,6 +168,7 @@ def trainRecurrent(environments, dataset, policy, critic, discriminator, num_ste
 
                 policy_cummulative_reward = 0
                 critic_cummulative_loss = 0
+                print("HA FUNCIONADO!!!!!!!!!!!!!!!!!!!!!!!!")
 
                 #Calculamos el reward medio sobre el evaluation dataset
                 with torch.no_grad():
