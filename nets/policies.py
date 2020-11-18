@@ -16,7 +16,7 @@ class RNNPolicy(nn.Module):
         self._end_position_embedding = nn.Embedding(action_space_shapes[0], 16)
         self._episode_percentage_embedding = nn.Embedding(num_steps, 8)
 
-        features_size = 8*8*512 + 16 + 8
+        features_size = 3*3*512 + 16 + 8
 
         # MLP inicial
         self._fc1 = nn.Sequential(

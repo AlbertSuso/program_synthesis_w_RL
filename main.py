@@ -14,9 +14,6 @@ from TrainingProcedures.training import trainSimple
 from TrainingProcedures.trainingRecurrent import trainRecurrent
 from TrainingProcedures.preTraining import preTrainFeatureExtractor
 
-def reward(inputs, outputs):
-    return torch.sum(inputs*outputs, dim=(1, 2, 3)) / torch.sum(((inputs+outputs)-inputs*outputs), dim=(1, 2, 3))
-
 
 """AQUI EMPIEZAN HIPERPARAMETROS. IMPLEMENTAR OPCIÓN DE SCRIPTING"""
 
@@ -46,8 +43,8 @@ state_dicts_path = args.state_dicts
 
 """AQUI FINALIZAN LOS HIPERPARAMETROS"""
 
-canvas_width = 64
-grid_width = 32
+canvas_width = 28
+grid_width = 28
 use_color = False
 brushes_basedir = '/home/albert/spiral/third_party/mypaint-brushes-1.3.0'
 brush_type = 'classic/calligraphy'
@@ -60,7 +57,6 @@ action_space_shapes = [environments[0]._action_spec[key].maximum+1 for key in en
 
 
 dataset = MNIST("datasets", train=True, download=False, transform=transforms.Compose([
-    transforms.Resize((64, 64)),
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,)),
     lambda x: x > 0,
@@ -77,7 +73,7 @@ if state_dicts_path is not None:
     policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512, batch_size=batch_size)
     policy.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_policy")).cuda()
 
-    critic = critics.Critic(num_steps, feature_extractor_critic)
+    critic = critics.Critic(num_steps, feature_extractor_critic, action_space_shapes[1])
     critic.load_state_dict(torch.load("state_dicts/experiment"+str(num_experiment)+"_critic")).cuda()
 
 else:
@@ -91,10 +87,9 @@ else:
 
     policy = policies.RNNPolicy(num_steps, action_space_shapes, feature_extractor_policy, lstm_size=512,
                                 batch_size=batch_size)
-    critic = critics.Critic(num_steps, feature_extractor_critic)
+    critic = critics.Critic(num_steps, feature_extractor_critic, action_space_shapes[1])
 
 
-discriminator = reward
-trainRecurrent(environments, dataset, policy, critic, discriminator, num_steps, batch_size,
-               num_epochs, policy_learning_rate, critic_learning_rate, entropy_param,
+trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size, num_epochs,
+               policy_learning_rate, critic_learning_rate, entropy_param,
                optimizer=Adam, num_experiment=num_experiment)
