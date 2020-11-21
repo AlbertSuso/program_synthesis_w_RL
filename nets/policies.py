@@ -10,6 +10,7 @@ class RNNPolicy(nn.Module):
         super(RNNPolicy, self).__init__()
 
         self.num_steps = num_steps
+        self._firstExecution = True
 
         self._feature_extractor = feature_extractor
 
@@ -44,6 +45,11 @@ class RNNPolicy(nn.Module):
         self._autoregressiveDecoder = AutoregressiveDecoder(action_space_shapes, lstm_size, batch_size)
 
     def forward(self, actualCanvas, objectiveCanvas, last_action_end_position, episode_percentage):
+        if self._firstExecution:
+            self._h = torch.zeros_like(self._h, device=actualCanvas.device)
+            self._c = torch.zeros_like(self._c, device=actualCanvas.device)
+            self._firstExecution = False
+
         features_maps = torch.cat((actualCanvas, objectiveCanvas), dim=1)
         features_vector = self._feature_extractor(features_maps).view(self._h.shape[1], -1)
 
@@ -56,7 +62,7 @@ class RNNPolicy(nn.Module):
 
         seed, (self._h, self._c) = self._LSTM(out_MLP, (self._h, self._c))
 
-        if episode_percentage == self.num_steps-1:
+        if episode_percentage[0] == self.num_steps-1:
             self._h = torch.zeros(self._h.shape, device=self._h.device)
             self._c = torch.zeros(self._c.shape, device=self._c.device)
 
@@ -87,15 +93,15 @@ class AutoregressiveDecoder(nn.Module):
             nn.ReLU())
 
     def forward(self, z):
-        action = torch.zeros((self._batch_size, 1), dtype=torch.long, device=self.device)
-        log_probabilities = torch.zeros(self._batch_size, dtype=torch.float32, device=self.device)
+        action = torch.zeros((self._batch_size, 1), dtype=torch.long, device=z.device)
+        log_probabilities = torch.zeros(self._batch_size, dtype=torch.float32, device=z.device)
         entropy = 0
         for mlp, embedding in zip(self._fc1, self._embeddings):
             # Sampleamos la sub-acción
             distribution = mlp(z)
             act = torch.distributions.Categorical(distribution).sample()
 
-            action = torch.cat((action, torch.tensor(act, dtype=torch.long, device=self.device).view(-1, 1)), dim=1)
+            action = torch.cat((action, torch.tensor(act, dtype=torch.long, device=z.device).view(-1, 1)), dim=1)
             entropy = entropy + torch.sum(torch.distributions.Categorical(distribution).entropy())
             for i in range(self._batch_size):
                 log_probabilities[i] = log_probabilities[i] + torch.log(distribution[i, act[i]])
