@@ -175,7 +175,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
                 with torch.no_grad():
                     for j, validateData in enumerate(evaldataloader):
                         objective_canvas = validateData[0].cuda(1)
-                        actions = torch.zeros((batch_size, len(environments[0]._action_spec)), device='cuda:1')
+                        actions = torch.zeros((batch_size, len(environments[0]._action_spec)), dtype=torch.long, device='cuda:1')
                         step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1')
                         for step in range(num_steps):
                             actual_canvas = torch.cat([torch.from_numpy(
@@ -238,7 +238,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
     with torch.no_grad():
         for j, validateData in enumerate(evaldataloader):
             objective_canvas = validateData[0].cuda(1)
-            actions = torch.zeros((batch_size, len(environments[0]._action_spec)), device='cuda:1')
+            actions = torch.zeros((batch_size, len(environments[0]._action_spec)), dtype=torch.long, device='cuda:1')
             step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1')
             for step in range(num_steps):
                 actual_canvas = torch.cat([torch.from_numpy(
