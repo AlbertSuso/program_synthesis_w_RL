@@ -35,5 +35,5 @@ class Critic(nn.Module):
         episode_percentage_embedding = self._episode_percentage_embedding(episode_percentage)
         brush_position_embedding = self._brush_position_embedding(brush_position)
 
-        x = torch.cat((features_vector, brush_position_embedding, episode_percentage_embedding), dim=1)
+        x = torch.cat((features_vector, brush_position_embedding, episode_percentage_embedding.view(features_vector.shape[0], -1)), dim=1)
         return self._fc3(self._fc2(self._fc1(x))).view(-1)

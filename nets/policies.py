@@ -56,7 +56,7 @@ class RNNPolicy(nn.Module):
         last_action_end_position_embedding = self._end_position_embedding(last_action_end_position)
         episode_percentage_embedding = self._episode_percentage_embedding(episode_percentage)
 
-        features = torch.cat((features_vector, last_action_end_position_embedding, episode_percentage_embedding), dim=1)
+        features = torch.cat((features_vector, last_action_end_position_embedding, episode_percentage_embedding.view(features_vector.shape[0], -1)), dim=1)
 
         out_MLP = self._fc3(self._fc2(self._fc1(features))).view(1, self._h.shape[1], self._h.shape[2])
 
