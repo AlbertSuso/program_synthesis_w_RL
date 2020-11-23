@@ -90,8 +90,8 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
             entropy_sum = 0
             actions = torch.zeros((batch_size, len(environments[0].action_spec)), dtype=torch.long, device='cuda:1')
             reward = 0
-            step_critic = torch.zeros(batch_size, dtype=torch.long, device='cuda:0').view(-1, 1)
-            step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1').view(-1, 1)
+            step_critic = torch.zeros(batch_size, dtype=torch.long, device='cuda:0')
+            step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1')
             for step in range(num_steps):
                 # Obtenemos el estado actual del environment
                 actual_canvas = torch.cat([torch.from_numpy(environment.observation()["canvas"])
@@ -176,7 +176,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
                     for j, validateData in enumerate(evaldataloader):
                         objective_canvas = validateData[0].cuda(1)
                         actions = torch.zeros((batch_size, len(environments[0]._action_spec)), device='cuda:1')
-                        step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1').view(-1, 1)
+                        step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1')
                         for step in range(num_steps):
                             actual_canvas = torch.cat([torch.from_numpy(
                                 environment.observation()["canvas"]).reshape(1, environment.num_channels,
@@ -239,7 +239,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
         for j, validateData in enumerate(evaldataloader):
             objective_canvas = validateData[0].cuda(1)
             actions = torch.zeros((batch_size, len(environments[0]._action_spec)), device='cuda:1')
-            step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1').view(-1, 1)
+            step_policy = torch.zeros(batch_size, dtype=torch.long, device='cuda:1')
             for step in range(num_steps):
                 actual_canvas = torch.cat([torch.from_numpy(
                     environment.observation()["canvas"]).reshape(1, environment.num_channels,
