@@ -199,7 +199,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
                         output_images = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(
                             1, environment.num_channels, environment.canvas_width, environment.canvas_width)
                             for environment in environments], dim=0)
-                        output_images.cuda(1)
+                        output_images = output_images.cuda(1)
                         reward = reward_foo(output_images, objective_canvas)
 
                         policy_cummulative_reward += torch.sum(reward)
@@ -262,7 +262,7 @@ def trainRecurrent(environments, dataset, policy, critic, num_steps, batch_size,
             output_images = torch.cat([torch.from_numpy(environment.observation()["canvas"]).reshape(
                 1, environment.num_channels, environment.canvas_width, environment.canvas_width)
                 for environment in environments], dim=0)
-            output_images.cuda(1)
+            output_images = output_images.cuda(1)
             reward = reward_foo(output_images, objective_canvas)
 
             policy_cummulative_reward += torch.sum(reward)

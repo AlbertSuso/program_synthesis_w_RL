@@ -46,7 +46,7 @@ state_dicts_path = args.state_dicts
 canvas_width = 28
 grid_width = 28
 use_color = False
-brushes_basedir = '/home/albert/spiral/third_party/mypaint-brushes-1.3.0'
+brushes_basedir = '/home/asuso/spiral/third_party/mypaint-brushes-1.3.0'
 brush_type = 'classic/calligraphy'
 
 environments = [Environment(canvas_width, grid_width, brush_type, use_color, brush_sizes=torch.linspace(1.2, 3, 10),
@@ -56,7 +56,7 @@ environments = [Environment(canvas_width, grid_width, brush_type, use_color, bru
 action_space_shapes = [environments[0]._action_spec[key].maximum+1 for key in environments[0]._action_spec]
 
 
-dataset = MNIST("datasets", train=True, download=False, transform=transforms.Compose([
+dataset = MNIST("/data2fast/users/asuso", train=True, download=False, transform=transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,)),
     lambda x: x > 0,
